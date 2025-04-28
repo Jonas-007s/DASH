@@ -25,7 +25,9 @@ import {
   MenuItem,
   Grid,
   Alert,
-  CircularProgress
+  CircularProgress,
+  useTheme, // Importar useTheme
+  useMediaQuery // Importar useMediaQuery
 } from '@mui/material';
 
 // Iconos
@@ -55,14 +57,17 @@ const UserManagement = ({ companyId }) => {
     email: '',
     password: '',
     role: '',
-    area: '',
-    location: '',
+    // area: '', // Eliminado
+    // location: '', // Eliminado
     company_id: companyId
   });
   
   // Estado para confirmación de eliminación
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
+  
+  const theme = useTheme(); // Obtener el tema
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // Verificar si es móvil
 
   // Verificar permisos
   const hasManageUsersPermission = authService.hasPermission('manage_users');
@@ -106,9 +111,9 @@ const UserManagement = ({ companyId }) => {
       const term = searchTerm.toLowerCase();
       filtered = users.filter(user => 
         (user.name && user.name.toLowerCase().includes(term)) || 
-        (user.email && user.email.toLowerCase().includes(term)) ||
-        (user.area && user.area.toLowerCase().includes(term)) ||
-        (user.location && user.location.toLowerCase().includes(term))
+        (user.email && user.email.toLowerCase().includes(term))
+        // (user.area && user.area.toLowerCase().includes(term)) || // Eliminado
+        // (user.location && user.location.toLowerCase().includes(term)) // Eliminado
       );
     }
     
@@ -185,19 +190,24 @@ const UserManagement = ({ companyId }) => {
       
       let updatedUser;
       
+      let userDataToSave = { ...currentUser };
+      // Eliminar area y location antes de guardar
+      delete userDataToSave.area;
+      delete userDataToSave.location;
+
       if (dialogMode === 'add') {
         // Crear nuevo usuario
-        updatedUser = await dbService.insert('users', currentUser);
+        updatedUser = await dbService.insert('users', userDataToSave);
         setUsers(prev => [...prev, updatedUser]);
       } else {
         // Actualizar usuario existente
-        const userToUpdate = {...currentUser};
-        
+        const userToUpdate = { ...userDataToSave };
+
         // Si no se cambió la contraseña, no enviarla en la actualización
         if (!userToUpdate.password) {
           delete userToUpdate.password;
         }
-        
+
         updatedUser = await dbService.update('users', currentUser.id, userToUpdate);
         setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
       }
@@ -271,9 +281,9 @@ const UserManagement = ({ companyId }) => {
   }
 
   return (
-    <Box sx={{ width: '100%' }}>
-      <Paper sx={{ width: '100%', mb: 2, p: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+    <Box sx={{ flexGrow: 1, p: { xs: 1, sm: 2, md: 3 } }}> {/* Ajustar padding responsivo */}
+    <Paper sx={{ width: '100%', mb: 2, p: { xs: 1, sm: 2 } }}> {/* Padding responsivo */}
+    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 2, gap: 2 }}> {/* Flex direction y gap responsivo */}
           <Typography variant="h6" component="div">
             Gestión de Usuarios
           </Typography>
@@ -282,6 +292,7 @@ const UserManagement = ({ companyId }) => {
             color="primary"
             startIcon={<AddIcon />}
             onClick={handleOpenAddDialog}
+            size={isMobile ? 'small' : 'medium'} // Tamaño responsivo
           >
             Nuevo Usuario
           </Button>
@@ -306,7 +317,7 @@ const UserManagement = ({ companyId }) => {
               </InputAdornment>
             ),
           }}
-          size="small"
+          size={isMobile ? 'small' : 'medium'} // Tamaño responsivo
           sx={{ mb: 2 }}
         />
 
@@ -316,16 +327,16 @@ const UserManagement = ({ companyId }) => {
           </Box>
         ) : (
           <>
-            <TableContainer>
-              <Table sx={{ minWidth: 650 }} aria-label="tabla de usuarios">
+            <TableContainer sx={{ overflowX: 'auto' }}>
+             <Table sx={{ minWidth: { xs: 400, sm: 650 } }} aria-label="tabla de usuarios"> {/* minWidth responsivo */}
                 <TableHead>
                   <TableRow>
                     <TableCell>ID</TableCell>
                     <TableCell>Nombre</TableCell>
                     <TableCell>Email</TableCell>
                     <TableCell>Rol</TableCell>
-                    <TableCell>Área</TableCell>
-                    <TableCell>Ubicación</TableCell>
+                    {/* <TableCell>Área</TableCell> */}
+                    {/* <TableCell>Ubicación</TableCell> */}
                     <TableCell align="right">Acciones</TableCell>
                   </TableRow>
                 </TableHead>
@@ -340,8 +351,8 @@ const UserManagement = ({ companyId }) => {
                         <TableCell>{user.name}</TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>{renderRoleChip(user.role)}</TableCell>
-                        <TableCell>{user.area}</TableCell>
-                        <TableCell>{user.location}</TableCell>
+                        {/* <TableCell>{user.area}</TableCell> */}
+                        {/* <TableCell>{user.location}</TableCell> */}
                         <TableCell align="right">
                           <IconButton
                             size="small"
@@ -362,7 +373,7 @@ const UserManagement = ({ companyId }) => {
                     ))}
                   {filteredUsers.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} align="center">
+                      <TableCell colSpan={5} align="center"> {/* Ajustado colSpan */} 
                         No se encontraron usuarios
                       </TableCell>
                     </TableRow>
@@ -380,13 +391,30 @@ const UserManagement = ({ companyId }) => {
               onRowsPerPageChange={handleChangeRowsPerPage}
               labelRowsPerPage="Filas por página:"
               labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+              sx={{ 
+                '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                  fontWeight: 500,
+                  color: 'text.secondary',
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' } // Tamaño de fuente responsivo
+                },
+                '.MuiTablePagination-select': {
+                  borderRadius: 1
+                },
+                '.MuiTablePagination-actions': {
+                  ml: { xs: 1, sm: 2 } // Margen responsivo
+                },
+                '.MuiTablePagination-toolbar': {
+                  flexWrap: 'wrap', // Permitir que los elementos se envuelvan en pantallas pequeñas
+                  justifyContent: 'center' // Centrar en pantallas pequeñas
+                }
+              }}
             />
           </>
         )}
       </Paper>
 
       {/* Diálogo para agregar/editar usuario */}
-      <Dialog open={userDialogOpen} onClose={handleCloseUserDialog} maxWidth="sm" fullWidth>
+     <Dialog open={userDialogOpen} onClose={handleCloseUserDialog} maxWidth="sm" fullWidth={!isMobile} fullScreen={isMobile}> {/* Fullscreen en móvil */}
         <DialogTitle>
           {dialogMode === 'add' ? 'Nuevo Usuario' : 'Editar Usuario'}
         </DialogTitle>
@@ -441,24 +469,8 @@ const UserManagement = ({ companyId }) => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Área"
-                name="area"
-                value={currentUser.area}
-                onChange={handleUserInputChange}
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Ubicación"
-                name="location"
-                value={currentUser.location}
-                onChange={handleUserInputChange}
-              />
-            </Grid>
+            {/* Grid item para Área eliminado */}
+            {/* Grid item para Ubicación eliminado */}
           </Grid>
         </DialogContent>
         <DialogActions>
@@ -470,7 +482,7 @@ const UserManagement = ({ companyId }) => {
       </Dialog>
 
       {/* Diálogo de confirmación para eliminar */}
-      <Dialog open={deleteDialogOpen} onClose={handleCloseDeleteDialog}>
+     <Dialog open={deleteDialogOpen} onClose={handleCloseDeleteDialog} maxWidth="xs" fullWidth={!isMobile} fullScreen={isMobile}> {/* Fullscreen en móvil */}
         <DialogTitle>Confirmar Eliminación</DialogTitle>
         <DialogContent>
           <Typography>

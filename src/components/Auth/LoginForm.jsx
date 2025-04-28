@@ -6,10 +6,6 @@ import {
   TextField,
   Button,
   Typography,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Alert,
   CircularProgress,
 } from '@mui/material';
@@ -19,7 +15,6 @@ const LoginForm = ({ onLogin }) => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    companyId: '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,7 +39,7 @@ const LoginForm = ({ onLogin }) => {
     
     try {
       // Validar que todos los campos estén completos
-      if (!formData.email || !formData.password || !formData.companyId) {
+      if (!formData.email || !formData.password) {
         setError('Por favor complete todos los campos');
         setLoading(false);
         return;
@@ -53,7 +48,6 @@ const LoginForm = ({ onLogin }) => {
       await onLogin({
         email: formData.email,
         password: formData.password,
-        companyId: formData.companyId
       });
     } catch (error) {
       setError('Error al iniciar sesión');
@@ -103,21 +97,7 @@ const LoginForm = ({ onLogin }) => {
               margin="normal"
               required
             />
-            <FormControl fullWidth margin="normal" required>
-              <InputLabel>Empresa</InputLabel>
-              <Select
-                name="companyId"
-                value={formData.companyId}
-                onChange={handleChange}
-                label="Empresa"
-              >
-                {companies.map((company) => (
-                  <MenuItem key={company.id} value={company.id}>
-                    {company.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            {/* FormControl for Company removed */}
             <Button
               type="submit"
               fullWidth

@@ -128,20 +128,21 @@ const OrderDetail = () => {
           return;
         }
         
-        if (userRole === 'operador' && orderData.assigned_to !== userId) {
-          setError('No tienes permiso para ver esta orden');
-          return;
-        }
+        // Eliminada la verificación de asignación para operadores
+        // if (userRole === 'operador' && orderData.assigned_to !== userId) {
+        //   setError('No tienes permiso para ver esta orden');
+        //   return;
+        // }
         
         setOrder(orderData);
         setEditedOrder(orderData);
         setNewStatus(orderData.status);
         
-        // Cargar usuarios para asignación
-        if (userRole === 'admin' || userRole === 'supervisor') {
-          const usersData = await dbService.find('users', { role: 'operador' });
-          setUsers(usersData);
-        }
+        // Eliminada la carga de usuarios (técnicos)
+        // if (userRole === 'admin' || userRole === 'supervisor') {
+        //   const usersData = await dbService.find('users', { role: 'operador' });
+        //   setUsers(usersData);
+        // }
       } catch (err) {
         console.error('Error al cargar la orden:', err);
         setError('Error al cargar los datos de la orden');
@@ -382,26 +383,7 @@ const OrderDetail = () => {
                     onChange={handleOrderChange}
                   />
                 </Grid>
-                {(userRole === 'admin' || userRole === 'supervisor') && (
-                  <Grid item xs={12} sm={6}>
-                    <FormControl fullWidth>
-                      <InputLabel>Técnico Asignado</InputLabel>
-                      <Select
-                        name="assigned_to"
-                        value={editedOrder.assigned_to || ''}
-                        onChange={handleOrderChange}
-                        label="Técnico Asignado"
-                      >
-                        <MenuItem value="">Sin asignar</MenuItem>
-                        {users.map(user => (
-                          <MenuItem key={user.id} value={user.id}>
-                            {user.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                )}
+                {/* Campo Técnico Asignado eliminado del modo edición */}
                 <Grid item xs={12} sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
                   <Button
                     variant="contained"
@@ -450,12 +432,7 @@ const OrderDetail = () => {
                     {new Date(order.created_at).toLocaleString()}
                   </Typography>
                 </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle1">Técnico Asignado:</Typography>
-                  <Typography>
-                    {order.assigned_to ? 'Técnico #' + order.assigned_to : 'Sin asignar'}
-                  </Typography>
-                </Grid>
+                {/* Campo Técnico Asignado eliminado de la vista */}
               </Grid>
             )}
           </Paper>

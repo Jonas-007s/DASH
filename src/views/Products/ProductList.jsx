@@ -18,12 +18,14 @@ import {
   InputAdornment,
   Card,
   CardMedia,
-  Grid,
+  Grid, // Asegúrate de que Grid esté importado
   Dialog,
   DialogActions,
   DialogContent,
   DialogContentText,
-  DialogTitle
+  DialogTitle,
+  useTheme, // Importar useTheme
+  useMediaQuery // Importar useMediaQuery
 } from '@mui/material';
 
 // Componentes personalizados
@@ -61,55 +63,79 @@ const ProductList = () => {
   const [editingProduct, setEditingProduct] = useState(null);
 
   const userData = authService.getUserData();
+  const theme = useTheme(); // Obtener el tema
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // Verificar si es móvil
 
-  // Cargar productos
+  // Cargar productos y suscribirse a cambios
   useEffect(() => {
+    let isMounted = true;
+
     const loadProducts = async () => {
       try {
-        // Verificar si existe la colección de productos
+        setLoading(true);
         let productsData = await dbService.find('products');
-        
-        // Si no existe, inicializarla
-        if (!productsData || productsData.length === 0) {
-          if (!dbService.data.products) {
-            dbService.data.products = [];
-          }
+        if (!productsData) {
+          dbService.data.products = []; // Asegurar que la colección exista
           productsData = [];
         }
-        
-        setProducts(productsData);
-        setFilteredProducts(productsData);
+        if (isMounted) {
+          setProducts(productsData);
+          // Aplicar filtro inicial si existe
+          const term = searchTerm.toLowerCase().trim();
+          let initialFiltered = productsData;
+          if (term) {
+            initialFiltered = productsData.filter(product => 
+              (product.code && product.code.toLowerCase().includes(term)) || 
+              (product.description && product.description.toLowerCase().includes(term)) ||
+              (product.area && product.area.toLowerCase().includes(term))
+            );
+          } 
+          setFilteredProducts(initialFiltered);
+        }
       } catch (error) {
         console.error('Error al cargar productos:', error);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     loadProducts();
-  }, []);
 
-  // Filtrar productos
+    // Suscribirse a cambios en la colección de productos
+    const unsubscribe = dbService.subscribe('products', (change) => {
+      console.log('ProductList: Cambio detectado en productos:', change);
+      if (isMounted) {
+        // Volver a cargar los productos cuando haya un cambio
+        loadProducts(); 
+      }
+    });
+
+    // Limpiar suscripción al desmontar
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []); // El array vacío asegura que esto se ejecute solo al montar y desmontar
+
+  // Filtrar productos (se ejecuta cuando products o searchTerm cambian)
   useEffect(() => {
     let filtered = [...products];
     const term = searchTerm.toLowerCase().trim();
 
     if (term) {
-      // Filtrar por término de búsqueda (que puede ser el área inicial o lo ingresado por el usuario)
       filtered = products.filter(product => 
         (product.code && product.code.toLowerCase().includes(term)) || 
         (product.description && product.description.toLowerCase().includes(term)) ||
         (product.area && product.area.toLowerCase().includes(term))
       );
-    } else {
-      // Si no hay término de búsqueda (ni inicial ni ingresado), mostrar todos o aplicar un filtro por defecto si se desea
-      // Por ahora, mostramos todos si no hay término
-      // Si se quisiera mantener el filtro 'inbound' por defecto cuando no hay búsqueda:
-      // filtered = products.filter(product => product.area && product.area.toLowerCase() === 'inbound');
-    }
+    } 
+    // No aplicar filtro por defecto aquí, se maneja en la carga inicial y cuando cambia searchTerm
     
     setFilteredProducts(filtered);
-    setPage(0); // Reset page to 0 whenever filters change
+    // No resetear la página aquí necesariamente, solo si la búsqueda cambia
+    // setPage(0); 
   }, [products, searchTerm]);
 
   const handleChangePage = (event, newPage) => {
@@ -190,7 +216,7 @@ const ProductList = () => {
   };
 
   return (
-    <Box sx={{ flexGrow: 1, p: 3 }}>
+    <Box sx={{ flexGrow: 1, p: { xs: 1, sm: 2, md: 3 } }}> {/* Ajustar padding responsivo */}
       {/* Modal de detalles del producto */}
       <ProductDetailModal 
         open={detailModalOpen} 
@@ -243,8 +269,8 @@ const ProductList = () => {
         areas={['Outbound', 'Inbound', 'Quality', 'Packing', 'WoodShop', 'Deviation']}
       />
       
-      <Paper sx={{ p: 4, borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+      <Paper sx={{ p: { xs: 2, sm: 3, md: 4 }, borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 4, gap: 2 }}> {/* Flex direction y gap responsivo */}
           <Typography variant="h5" sx={{ fontWeight: 600, color: 'primary.main' }}>Productos Registrados</Typography>
           
           <Button
@@ -280,6 +306,7 @@ const ProductList = () => {
                 </InputAdornment>
               ),
             }}
+            size={isMobile ? 'small' : 'medium'} // Tamaño responsivo
           />
         </Box>
         
@@ -289,147 +316,155 @@ const ProductList = () => {
           <Typography>No hay productos registrados. Comience registrando uno nuevo.</Typography>
         ) : (
           <>
-            <TableContainer sx={{ borderRadius: 2, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 600 }}>Código</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Descripción</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Cantidad</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Área</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Fotos</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Acciones</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredProducts
-                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                    .map((product) => (
-                      <TableRow key={product.id} sx={{ '&:hover': { bgcolor: 'rgba(37, 99, 235, 0.04)' } }}>
-                        <TableCell sx={{ fontWeight: 500 }}>{product.code}</TableCell>
-                        <TableCell sx={{ color: product.description ? 'red' : 'inherit' }}>{product.description}</TableCell>
-                        <TableCell sx={{ fontWeight: 500 }}>{product.quantity}</TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={product.area} 
-                            size="small" 
-                            sx={{ 
-                              fontWeight: 500, 
-                              bgcolor: 'primary.light', 
-                              color: 'primary.contrastText',
-                              px: 1
-                            }} 
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {product.photos && product.photos.length > 0 ? (
-                            <Box sx={{ display: 'flex', gap: 1 }}>
-                              {product.photos.slice(0, 2).map((photo, index) => (
-                                <Card 
-                                  key={index} 
-                                  sx={{ 
-                                    width: 60, 
-                                    height: 60, 
-                                    borderRadius: 2,
-                                    overflow: 'hidden',
-                                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                                    transition: 'transform 0.2s',
-                                    '&:hover': {
-                                      transform: 'scale(1.05)',
-                                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                                    }
-                                  }}
-                                >
-                                  <CardMedia
-                                    component="img"
-                                    height="60"
-                                    image={photo.url}
-                                    alt={`Producto ${product.code}`}
-                                    sx={{ objectFit: 'cover' }}
-                                  />
-                                </Card>
-                              ))}
-                              {product.photos.length > 2 && (
-                                <Chip 
-                                  label={`+${product.photos.length - 2}`} 
-                                  size="small" 
-                                  variant="outlined"
-                                  sx={{ bgcolor: 'rgba(37, 99, 235, 0.1)', borderColor: 'primary.light' }}
-                                />
-                              )}
-                            </Box>
-                          ) : (
-                            <Typography variant="body2" color="text.secondary">
-                              Sin fotos
-                            </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', gap: 1 }}>
-                            <IconButton 
+              <TableContainer sx={{ overflowX: 'auto' }}> {/* Asegurar overflowX */}
+                <Table sx={{ minWidth: 650 }}> {/* Añadir minWidth para forzar scroll si es necesario */}
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ fontWeight: 600 }}>Código</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Descripción</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Cantidad</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Área</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Fotos</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Acciones</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {filteredProducts
+                      .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                      .map((product) => (
+                        <TableRow key={product.id} sx={{ '&:hover': { bgcolor: 'rgba(37, 99, 235, 0.04)' } }}>
+                          <TableCell sx={{ fontWeight: 500 }}>{product.code}</TableCell>
+                          <TableCell sx={{ color: product.description ? 'red' : 'inherit' }}>{product.description}</TableCell>
+                          <TableCell sx={{ fontWeight: 500 }}>{product.quantity}</TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={product.area} 
                               size="small" 
-                              color="primary"
-                              onClick={() => handleViewProduct(product)}
                               sx={{ 
-                                bgcolor: 'rgba(37, 99, 235, 0.1)', 
-                                '&:hover': { bgcolor: 'rgba(37, 99, 235, 0.2)' } 
-                              }}
-                            >
-                              <VisibilityIcon fontSize="small" />
-                            </IconButton>
-                            {/* Mostrar botón de edición solo si el usuario tiene permiso */}
-                            {(authService.hasPermission('edit_product') || userData?.role === 'operador') && (
+                                fontWeight: 500, 
+                                bgcolor: 'primary.light', 
+                                color: 'primary.contrastText',
+                                px: 1
+                              }} 
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {product.photos && product.photos.length > 0 ? (
+                              <Box sx={{ display: 'flex', gap: 1 }}>
+                                {product.photos.slice(0, 2).map((photo, index) => (
+                                  <Card 
+                                    key={index} 
+                                    sx={{ 
+                                      width: { xs: 40, sm: 50, md: 60 }, // Tamaño responsivo
+                                      height: { xs: 40, sm: 50, md: 60 }, // Tamaño responsivo
+                                      borderRadius: 2,
+                                      overflow: 'hidden',
+                                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                                      transition: 'transform 0.2s',
+                                      '&:hover': {
+                                        transform: 'scale(1.05)',
+                                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                                      }
+                                    }}
+                                  >
+                                    <CardMedia
+                                      component="img"
+                                      height="60"
+                                      image={photo.url}
+                                      alt={`Producto ${product.code}`}
+                                      sx={{ objectFit: 'cover' }}
+                                    />
+                                  </Card>
+                                ))}
+                                {product.photos.length > (isMobile ? 1 : 2) && ( // Mostrar menos fotos en móvil
+                                  <Chip 
+                                    label={`+${product.photos.length - (isMobile ? 1 : 2)}`} 
+                                    size="small" 
+                                    variant="outlined"
+                                    sx={{ bgcolor: 'rgba(37, 99, 235, 0.1)', borderColor: 'primary.light', alignSelf: 'center' }}
+                                  />
+                                )}
+                              </Box>
+                            ) : (
+                              <Typography variant="body2" color="text.secondary">
+                                Sin fotos
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', gap: 0.5 }}> {/* Reducir gap en móvil si es necesario */}
                               <IconButton 
                                 size="small" 
-                                color="secondary"
-                                onClick={() => handleEditProduct(product)}
+                                color="primary"
+                                onClick={() => handleViewProduct(product)}
                                 sx={{ 
-                                  bgcolor: 'rgba(236, 72, 153, 0.1)', 
-                                  '&:hover': { bgcolor: 'rgba(236, 72, 153, 0.2)' } 
+                                  bgcolor: 'rgba(37, 99, 235, 0.1)', 
+                                  '&:hover': { bgcolor: 'rgba(37, 99, 235, 0.2)' } 
                                 }}
                               >
-                                <EditIcon fontSize="small" />
+                                <VisibilityIcon fontSize="small" />
                               </IconButton>
-                            )}
-                            <IconButton 
-                              size="small" 
-                              color="error"
-                              onClick={() => handleDeleteProduct(product)}
-                              sx={{ 
-                                bgcolor: 'rgba(239, 68, 68, 0.1)', 
-                                '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.2)' } 
-                              }}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            
-            <TablePagination
-              rowsPerPageOptions={[5, 10, 25]}
-              component="div"
-              count={filteredProducts.length}
-              rowsPerPage={rowsPerPage}
-              page={page}
-              onPageChange={handleChangePage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
-              labelRowsPerPage="Filas por página:"
-              labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-              sx={{ 
-                '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
-                  fontWeight: 500,
-                  color: 'text.secondary'
-                },
-                '.MuiTablePagination-select': {
-                  borderRadius: 1
-                }
-              }}
-            />
+                              {/* Mostrar botón de edición solo si el usuario tiene permiso */}
+                              {(authService.hasPermission('edit_product') || userData?.role === 'operador') && (
+                                <IconButton 
+                                  size="small" 
+                                  color="secondary"
+                                  onClick={() => handleEditProduct(product)}
+                                  sx={{ 
+                                    bgcolor: 'rgba(236, 72, 153, 0.1)', 
+                                    '&:hover': { bgcolor: 'rgba(236, 72, 153, 0.2)' } 
+                                  }}
+                                >
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              )}
+                              <IconButton 
+                                size="small" 
+                                color="error"
+                                onClick={() => handleDeleteProduct(product)}
+                                sx={{ 
+                                  bgcolor: 'rgba(239, 68, 68, 0.1)', 
+                                  '&:hover': { bgcolor: 'rgba(239, 68, 68, 0.2)' } 
+                                }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              
+              <TablePagination
+                rowsPerPageOptions={[5, 10, 25]}
+                component="div"
+                count={filteredProducts.length}
+                rowsPerPage={rowsPerPage}
+                page={page}
+                onPageChange={handleChangePage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                labelRowsPerPage="Filas por página:"
+                labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+                sx={{ 
+                  '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                    fontWeight: 500,
+                    color: 'text.secondary',
+                    fontSize: { xs: '0.75rem', sm: '0.875rem' } // Tamaño de fuente responsivo
+                  },
+                  '.MuiTablePagination-select': {
+                    borderRadius: 1
+                  },
+                  '.MuiTablePagination-actions': {
+                    ml: { xs: 1, sm: 2 } // Margen responsivo
+                  },
+                  '.MuiTablePagination-toolbar': {
+                    flexWrap: 'wrap', // Permitir que los elementos se envuelvan en pantallas pequeñas
+                    justifyContent: 'center' // Centrar en pantallas pequeñas
+                  }
+                }}
+              />
           </>
         )}
       </Paper>

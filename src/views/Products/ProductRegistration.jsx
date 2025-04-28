@@ -40,7 +40,7 @@ const ProductRegistration = () => {
   const [product, setProduct] = useState({
     code: '',
     description: '',
-    quantity: 1,
+    quantity: '', // Cambiado de 1 a ''
     area: userData?.area || '',
     photos: [],
     created_by: userData?.id || 0,
@@ -181,7 +181,7 @@ const ProductRegistration = () => {
         setProduct({
           code: '',
           description: '',
-          quantity: 1,
+          quantity: '', // Cambiado de 1 a ''
           area: userData?.area || '',
           photos: [],
           created_by: userData?.id || 0,

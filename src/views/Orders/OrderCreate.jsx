@@ -37,7 +37,6 @@ const OrderCreate = () => {
     company_id: userData?.companyId || 1,
     created_at: new Date().toISOString(),
     status: 'pending',
-    assigned_to: null,
     client_id: userData?.role === 'client' ? userData.id : null,
     photos: [],
     comments: []
@@ -46,23 +45,9 @@ const OrderCreate = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [technicians, setTechnicians] = useState([]);
+  // const [technicians, setTechnicians] = useState([]); // Eliminado estado de técnicos
 
-  // Cargar técnicos disponibles si el usuario es admin o supervisor
-  React.useEffect(() => {
-    const loadTechnicians = async () => {
-      if (userData?.role === 'admin' || userData?.role === 'supervisor') {
-        try {
-          const techData = await dbService.find('users', { role: 'operador' });
-          setTechnicians(techData);
-        } catch (err) {
-          console.error('Error al cargar operadores:', err);
-        }
-      }
-    };
-    
-    loadTechnicians();
-  }, [userData?.role]);
+  // Eliminado useEffect para cargar técnicos
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -189,27 +174,7 @@ const OrderCreate = () => {
               </FormControl>
             </Grid>
             
-            {(userData?.role === 'admin' || userData?.role === 'supervisor') && (
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Asignar a Técnico</InputLabel>
-                  <Select
-                    name="assigned_to"
-                    value={order.assigned_to || ''}
-                    label="Asignar a Técnico"
-                    onChange={handleChange}
-                    disabled={loading || success}
-                  >
-                    <MenuItem value="">Sin asignar</MenuItem>
-                    {technicians.map(tech => (
-                      <MenuItem key={tech.id} value={tech.id}>
-                        {tech.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-            )}
+            {/* Campo Asignar a Técnico eliminado */}
             
             <Grid item xs={12} sx={{ mt: 2 }}>
               <Button

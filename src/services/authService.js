@@ -9,15 +9,13 @@ class AuthService {
 
   async login(credentials) {
     try {
-      const { email, password, companyId } = credentials;
-      
+      const { email, password } = credentials;
+       
       // Validar credenciales
-      // Asegurarse de que companyId sea un número para la comparación
-      const companyIdNum = typeof companyId === 'string' ? parseInt(companyId, 10) : companyId;
+      // companyId ya no se usa aquí
       
       const user = await dbService.findOne('users', { 
-        email, 
-        company_id: companyIdNum 
+        email
       });
 
       if (!user) {
@@ -39,7 +37,7 @@ class AuthService {
         email: user.email,
         role: user.role,
         area: user.area,
-        companyId: user.company_id,
+        companyId: user.company_id, // Asegúrate que company_id exista en el objeto user
         location: user.location
       };
 
@@ -49,6 +47,7 @@ class AuthService {
       
       return userData;
     } catch (error) {
+      // Lanzar el error correctamente
       throw new Error(`Error en el inicio de sesión: ${error.message}`);
     }
   }
@@ -56,7 +55,7 @@ class AuthService {
   logout() {
     localStorage.removeItem(this.tokenKey);
     localStorage.removeItem(this.userKey);
-    sessionStorage.clear();
+    sessionStorage.clear(); // Añadir punto y coma
   }
 
   isAuthenticated() {
@@ -68,21 +67,21 @@ class AuthService {
   }
 
   setToken(token) {
-    localStorage.setItem(this.tokenKey, token);
+    localStorage.setItem(this.tokenKey, token); // Añadir punto y coma
   }
 
   getUserData() {
     const data = localStorage.getItem(this.userKey);
-    return data ? JSON.parse(data) : null;
+    return data ? JSON.parse(data) : null; // Añadir punto y coma
   }
 
   setUserData(userData) {
-    localStorage.setItem(this.userKey, JSON.stringify(userData));
+    localStorage.setItem(this.userKey, JSON.stringify(userData)); // Añadir punto y coma
   }
 
   hasPermission(requiredRole) {
     const userData = this.getUserData();
-    if (!userData) return false;
+    if (!userData) return false; // Añadir punto y coma
 
     const userRole = userData.role;
     const roleConfig = AUTH_CONFIG.roles[userRole];

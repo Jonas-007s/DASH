@@ -25,7 +25,9 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Grid
+  Grid,
+  useTheme, // Importar useTheme
+  useMediaQuery // Importar useMediaQuery
 } from '@mui/material';
 
 // Iconos
@@ -97,42 +99,87 @@ const OrdersView = () => {
     status: '',
     priority: ''
   });
+  const theme = useTheme(); // Obtener el tema
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // Verificar si es móvil
 
   const userData = authService.getUserData();
   const userRole = userData?.role || '';
   const userId = userData?.id || 0;
 
-  // Cargar órdenes
+  // Cargar órdenes y suscribirse a cambios
   useEffect(() => {
+    let isMounted = true;
+
     const loadOrders = async () => {
       try {
+        setLoading(true);
         let ordersData;
         
         // Si es cliente, solo ver sus propias órdenes
         if (userRole === 'client') {
           ordersData = await dbService.find('orders', { client_id: userId });
         } else {
-          // Para otros roles, cargar todas las órdenes o las asignadas (operador)
-          if (userRole === 'operador') {
-            ordersData = await dbService.find('orders', { assigned_to: userId });
-          } else {
-            ordersData = await dbService.find('orders');
-          }
+          // Para otros roles (admin, supervisor, operador), cargar todas las órdenes
+          ordersData = await dbService.find('orders');
         }
         
-        setOrders(ordersData);
-        setFilteredOrders(ordersData);
+        if (!ordersData) {
+          dbService.data.orders = []; // Asegurar que la colección exista
+          ordersData = [];
+        }
+
+        if (isMounted) {
+          setOrders(ordersData);
+          // Aplicar filtros y búsqueda iniciales si es necesario
+          let initialFiltered = ordersData;
+          if (!searchTerm && !filters.status && !filters.priority) {
+            initialFiltered = ordersData.filter(order => order.status === 'pending');
+          } else {
+            if (searchTerm) {
+              const term = searchTerm.toLowerCase();
+              initialFiltered = initialFiltered.filter(order => 
+                (order.title && order.title.toLowerCase().includes(term)) || 
+                (order.description && order.description.toLowerCase().includes(term)) ||
+                (order.location && order.location.toLowerCase().includes(term))
+              );
+            }
+            if (filters.status) {
+              initialFiltered = initialFiltered.filter(order => order.status === filters.status);
+            }
+            if (filters.priority) {
+              initialFiltered = initialFiltered.filter(order => order.priority === filters.priority);
+            }
+          }
+          setFilteredOrders(initialFiltered);
+        }
       } catch (error) {
         console.error('Error al cargar órdenes:', error);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     loadOrders();
-  }, [userRole, userId]);
 
-  // Filtrar órdenes
+    // Suscribirse a cambios en la colección de órdenes
+    const unsubscribe = dbService.subscribe('orders', (change) => {
+      console.log('OrdersView: Cambio detectado en órdenes:', change);
+      if (isMounted) {
+        // Volver a cargar las órdenes cuando haya un cambio
+        loadOrders(); 
+      }
+    });
+
+    // Limpiar suscripción al desmontar
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [userRole, userId]); // Dependencias originales para la carga inicial
+
+  // Filtrar órdenes (se ejecuta cuando orders, searchTerm o filters cambian)
   useEffect(() => {
     let result = [...orders];
     
@@ -214,135 +261,9 @@ const OrdersView = () => {
   const canCreateOrder = authService.hasPermission('create_order');
 
   return (
-    <Box sx={{ width: '100%' }}>
-      <Paper sx={{ width: '100%', mb: 2, p: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" component="div">
-            Órdenes de Trabajo
-          </Typography>
-          <Box>
-            {canCreateOrder && (
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={<AddIcon />}
-                onClick={handleCreateOrder}
-                sx={{ ml: 1 }}
-              >
-                Nueva Orden
-              </Button>
-            )}
-          </Box>
-        </Box>
-
-        <Grid container spacing={2} sx={{ mb: 2 }}>
-          <Grid item xs={12} sm={6}>
-            <TextField
-              fullWidth
-              variant="outlined"
-              placeholder="Buscar órdenes..."
-              value={searchTerm}
-              onChange={handleSearchChange}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
-              }}
-              size="small"
-            />
-          </Grid>
-          <Grid item xs={12} sm={6} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              variant="outlined"
-              startIcon={<FilterListIcon />}
-              onClick={handleFilterDialogOpen}
-              size="medium"
-            >
-              Filtros
-              {(filters.status || filters.priority) && (
-                <Chip 
-                  size="small" 
-                  label={Object.values(filters).filter(Boolean).length} 
-                  color="primary" 
-                  sx={{ ml: 1 }}
-                />
-              )}
-            </Button>
-          </Grid>
-        </Grid>
-
-        <TableContainer>
-          <Table sx={{ minWidth: 650 }} aria-label="tabla de órdenes">
-            <TableHead>
-              <TableRow>
-                <TableCell>ID</TableCell>
-                <TableCell>Título</TableCell>
-                <TableCell>Estado</TableCell>
-                <TableCell>Prioridad</TableCell>
-                <TableCell>Ubicación</TableCell>
-                <TableCell>Fecha Creación</TableCell>
-                <TableCell align="right">Acciones</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredOrders
-                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((order) => (
-                  <TableRow key={order.id} hover>
-                    <TableCell component="th" scope="row">
-                      {order.id}
-                    </TableCell>
-                    <TableCell>{order.title}</TableCell>
-                    <TableCell>
-                      <OrderStatusChip status={order.status} />
-                    </TableCell>
-                    <TableCell>
-                      <PriorityChip priority={order.priority} />
-                    </TableCell>
-                    <TableCell>{order.location}</TableCell>
-                    <TableCell>
-                      {new Date(order.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell align="right">
-                      <Tooltip title="Ver detalles">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleViewOrder(order.id)}
-                          color="primary"
-                        >
-                          <VisibilityIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              {filteredOrders.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} align="center">
-                    No se encontraron órdenes
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
-          component="div"
-          count={filteredOrders.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-          labelRowsPerPage="Filas por página:"
-          labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-        />
-      </Paper>
-
-      {/* Diálogo de filtros */}
-      <Dialog open={filterDialogOpen} onClose={handleFilterDialogClose}>
+    <Box sx={{ flexGrow: 1, p: { xs: 1, sm: 2, md: 3 } }}> {/* Ajustar padding responsivo */}
+      {/* Diálogo de Filtros */}
+      <Dialog open={filterDialogOpen} onClose={handleFilterDialogClose} maxWidth="xs" fullWidth>
         <DialogTitle>Filtrar Órdenes</DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 1, width: 300 }}>
@@ -387,7 +308,153 @@ const OrdersView = () => {
           </Button>
         </DialogActions>
       </Dialog>
-    </Box>
+
+      <Paper sx={{ p: { xs: 2, sm: 3, md: 4 }, borderRadius: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'flex-start', sm: 'center' }, mb: 4, gap: 2 }}> {/* Flex direction y gap responsivo */}
+          <Typography variant="h5" sx={{ fontWeight: 600, color: 'primary.main' }}>Órdenes de Trabajo</Typography>
+          
+          {/* Botón Crear Orden (si tiene permiso) */}
+          {canCreateOrder && (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<AddIcon />}
+              onClick={handleCreateOrder}
+              sx={{ px: 3, py: 1.2, borderRadius: 2, boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)' }}
+            >
+              Crear Orden
+            </Button>
+          )}
+        </Box>
+
+        {/* Barra de Búsqueda y Filtros */}
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2, mb: 4 }}>
+          <TextField
+            fullWidth
+            placeholder="Buscar por título, descripción o ubicación..."
+            variant="outlined"
+            value={searchTerm}
+            onChange={handleSearchChange}
+            sx={{ 
+              flexGrow: 1,
+              '& .MuiOutlinedInput-root': { 
+                borderRadius: 2,
+                '&.Mui-focused': {
+                  boxShadow: '0 0 0 3px rgba(37, 99, 235, 0.1)'
+                }
+              } 
+            }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon color="primary" />
+                </InputAdornment>
+              ),
+            }}
+            size={isMobile ? 'small' : 'medium'} // Tamaño responsivo
+          />
+          <Button
+            variant="outlined"
+            startIcon={<FilterListIcon />}
+            onClick={handleFilterDialogOpen}
+            sx={{ borderRadius: 2, height: isMobile ? '40px' : '56px' }} // Ajustar altura
+          >
+            Filtros
+          </Button>
+        </Box>
+
+        {loading ? (
+          <Typography>Cargando órdenes...</Typography>
+        ) : (
+          <>
+            <TableContainer sx={{ overflowX: 'auto' }}>
+              <Table sx={{ minWidth: 650 }} aria-label="tabla de órdenes">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>ID</TableCell>
+                    <TableCell>Título</TableCell>
+                    <TableCell>Estado</TableCell>
+                    <TableCell>Prioridad</TableCell>
+                    <TableCell>Ubicación</TableCell>
+                    <TableCell>Fecha Creación</TableCell>
+                    <TableCell align="right">Acciones</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredOrders
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((order) => (
+                      <TableRow key={order.id} hover>
+                        <TableCell component="th" scope="row">
+                          {order.id}
+                        </TableCell>
+                        <TableCell>{order.title}</TableCell>
+                        <TableCell>
+                          <OrderStatusChip status={order.status} />
+                        </TableCell>
+                        <TableCell>
+                          <PriorityChip priority={order.priority} />
+                        </TableCell>
+                        <TableCell>{order.location}</TableCell>
+                        <TableCell>
+                          {new Date(order.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Tooltip title="Ver detalles">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleViewOrder(order.id)}
+                              color="primary"
+                            >
+                              <VisibilityIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                  ))}
+                {filteredOrders.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} align="center">
+                      No se encontraron órdenes
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          {/* Paginación */}
+          <TablePagination
+            rowsPerPageOptions={[5, 10, 25]}
+            component="div"
+            count={filteredOrders.length}
+            rowsPerPage={rowsPerPage}
+            page={page}
+            onPageChange={handleChangePage}
+            onRowsPerPageChange={handleChangeRowsPerPage}
+            labelRowsPerPage="Filas por página:"
+            labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+            sx={{ 
+              '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                fontWeight: 500,
+                color: 'text.secondary',
+                fontSize: { xs: '0.75rem', sm: '0.875rem' } // Tamaño de fuente responsivo
+              },
+              '.MuiTablePagination-select': {
+                borderRadius: 1
+              },
+              '.MuiTablePagination-actions': {
+                ml: { xs: 1, sm: 2 } // Margen responsivo
+              },
+              '.MuiTablePagination-toolbar': {
+                flexWrap: 'wrap', // Permitir que los elementos se envuelvan en pantallas pequeñas
+                justifyContent: 'center' // Centrar en pantallas pequeñas
+              }
+            }}
+          />
+        </>
+      )}
+    </Paper>
+  </Box>
   );
 };
 
